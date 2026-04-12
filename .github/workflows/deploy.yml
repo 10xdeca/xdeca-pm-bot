@@ -34,7 +34,7 @@ jobs:
 
       - name: Generate .env file
         run: |
-          cat > .env <<'ENVEOF'
+          cat > .env <<EOF
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           KAN_API_KEY=${{ secrets.KAN_API_KEY }}
           KAN_BASE_URL=${{ secrets.KAN_BASE_URL }}
@@ -46,9 +46,17 @@ jobs:
           REMINDER_INTERVAL_HOURS=${{ secrets.REMINDER_INTERVAL_HOURS }}
           ADMIN_USER_IDS=${{ secrets.ADMIN_USER_IDS }}
           PLAYWRIGHT_ENABLED=${{ secrets.PLAYWRIGHT_ENABLED }}
+          CONTACT_SCANNER_ENABLED=${{ secrets.CONTACT_SCANNER_ENABLED }}
           GITHUB_TOKEN=${{ secrets.GREMLIN_GITHUB_TOKEN }}
+          GREMLIN_EMAIL=${{ secrets.GREMLIN_EMAIL }}
+          GREMLIN_EMAIL_PASSWORD=${{ secrets.GREMLIN_EMAIL_PASSWORD }}
+          GREMLIN_GITHUB_TOKEN=${{ secrets.GREMLIN_GITHUB_TOKEN }}
+          WEBHOOK_URL=${{ secrets.WEBHOOK_URL }}
+          WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
           DEPLOY_SHA=${{ github.sha }}
-          ENVEOF
+          EOF
+          # Strip leading whitespace from heredoc indentation
+          sed -i 's/^[[:space:]]*//' .env
 
       - name: Setup SSH
         run: |
@@ -61,8 +69,8 @@ jobs:
         run: |
           rsync -avz \
             -e "ssh -i ~/.ssh/deploy_key" \
-            deploy/docker-compose.yml .env \
-            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/gremlin/
+            docker-compose.yml .env deploy-info.txt \
+            nick@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-gremlin/
 
       - name: Deploy source
         run: |
@@ -75,17 +83,17 @@ jobs:
             --exclude .github \
             -e "ssh -i ~/.ssh/deploy_key" \
             ./ \
-            ubuntu@${{ secrets.DEPLOY_HOST }}:~/apps/gremlin/src/
+            nick@${{ secrets.DEPLOY_HOST }}:~/apps/xdeca-gremlin/src/
 
       - name: Build and restart
         run: |
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
-            'cd ~/apps/gremlin && docker compose build --pull && docker compose up -d'
+          ssh -i ~/.ssh/deploy_key nick@${{ secrets.DEPLOY_HOST }} \
+            'cd ~/apps/xdeca-gremlin && DOCKER_BUILDKIT=1 docker compose build && docker compose up -d'
 
       - name: Verify deployment
         run: |
           for i in $(seq 1 8); do
-            HEALTH=$(ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+            HEALTH=$(ssh -i ~/.ssh/deploy_key nick@${{ secrets.DEPLOY_HOST }} \
               'curl -sf http://localhost:8080/health 2>/dev/null || echo "{\"status\":\"unreachable\"}"')
             STATUS=$(echo "$HEALTH" | jq -r '.status // "unreachable"')
             echo "Attempt $i: health=$STATUS"
@@ -93,7 +101,7 @@ jobs:
             sleep 5
           done
           echo "::error::Health check failed after 40s! Dumping logs:"
-          ssh -i ~/.ssh/deploy_key ubuntu@${{ secrets.DEPLOY_HOST }} \
+          ssh -i ~/.ssh/deploy_key nick@${{ secrets.DEPLOY_HOST }} \
             'docker logs --tail 50 gremlin'
           exit 1
 

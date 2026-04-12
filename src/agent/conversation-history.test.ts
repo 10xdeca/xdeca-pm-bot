@@ -316,12 +316,16 @@ describe("conversation-history", () => {
 
     const history = getHistory(chatId);
     expect(history).toHaveLength(4);
-    // Tool use block deserialized to array
+    // Legacy tool_use block migrated to AI SDK tool-call format
     expect(Array.isArray(history[1].content)).toBe(true);
-    expect((history[1].content as any[])[0].type).toBe("tool_use");
-    // Tool result block deserialized to array
+    expect((history[1].content as any[])[0].type).toBe("tool-call");
+    expect((history[1].content as any[])[0].toolCallId).toBe("toolu_789");
+    expect((history[1].content as any[])[0].toolName).toBe("kan_get_card");
+    // Legacy tool_result block migrated to AI SDK tool-result format, role flipped to "tool"
+    expect(history[2].role).toBe("tool");
     expect(Array.isArray(history[2].content)).toBe(true);
-    expect((history[2].content as any[])[0].type).toBe("tool_result");
+    expect((history[2].content as any[])[0].type).toBe("tool-result");
+    expect((history[2].content as any[])[0].toolCallId).toBe("toolu_789");
   });
 
   it("truncates large tool results in DB", () => {

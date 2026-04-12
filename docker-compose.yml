@@ -1,0 +1,41 @@
+services:
+  gremlin:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    container_name: gremlin
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - KAN_BASE_URL=${KAN_BASE_URL:-https://tasks.xdeca.com/api/v1}
+      - KAN_API_KEY=${KAN_API_KEY}
+      - KAN_SERVICE_API_KEY=${KAN_SERVICE_API_KEY:-}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - OUTLINE_API_KEY=${OUTLINE_API_KEY:-}
+      - OUTLINE_BASE_URL=${OUTLINE_BASE_URL:-https://kb.xdeca.com/api}
+      - RADICALE_URL=${RADICALE_URL:-https://dav.xdeca.com}
+      - RADICALE_USERNAME=${RADICALE_USERNAME:-pm-agent}
+      - RADICALE_PASSWORD=${RADICALE_PASSWORD}
+      - RADICALE_CALENDAR_OWNER=${RADICALE_CALENDAR_OWNER:-nick}
+      - RADICALE_ADDRESS_BOOK_URL=${RADICALE_ADDRESS_BOOK_URL:-}
+      - SPRINT_START_DATE=${SPRINT_START_DATE:-2025-01-05}
+      - REMINDER_INTERVAL_HOURS=${REMINDER_INTERVAL_HOURS:-1}
+      - ADMIN_USER_IDS=${ADMIN_USER_IDS}
+      - PLAYWRIGHT_ENABLED=${PLAYWRIGHT_ENABLED:-}
+      - CONTACT_SCANNER_ENABLED=${CONTACT_SCANNER_ENABLED:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GREMLIN_EMAIL=${GREMLIN_EMAIL:-}
+      - GREMLIN_EMAIL_PASSWORD=${GREMLIN_EMAIL_PASSWORD:-}
+      - GREMLIN_GITHUB_TOKEN=${GREMLIN_GITHUB_TOKEN:-}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - SKIP_REBIRTH_ANNOUNCEMENT=${SKIP_REBIRTH_ANNOUNCEMENT:-}
+      - DEPLOY_SHA=${DEPLOY_SHA:-dev}
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - gremlin_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  gremlin_data:
