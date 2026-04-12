@@ -53,6 +53,58 @@ function deserializeContent(raw: string): string | unknown[] {
   }
 }
 
+/** Recognized AI SDK content block types. */
+const VALID_BLOCK_TYPES = new Set(["text", "tool-call", "tool-result", "image", "file"]);
+
+/**
+ * Migrate a deserialized message to match the AI SDK ModelMessage schema.
+ * - Converts Anthropic-native `tool_use` blocks → AI SDK `tool-call`
+ * - Converts Anthropic-native `tool_result` blocks → AI SDK `tool-result`
+ *   and flips the role from "user" to "tool"
+ * - Drops messages with unrecognized block types as a safety net
+ *
+ * Returns null if the message should be dropped entirely.
+ */
+function migrateMessage(msg: { role: string; content: string | unknown[] }): { role: string; content: string | unknown[] } | null {
+  if (typeof msg.content === "string") return msg;
+
+  const blocks = msg.content as Record<string, unknown>[];
+  let needsRoleFlip = false;
+  const migrated = blocks.map((block) => {
+    // Anthropic tool_use → AI SDK tool-call
+    if (block.type === "tool_use") {
+      return {
+        type: "tool-call",
+        toolCallId: block.id as string,
+        toolName: block.name as string,
+        args: block.input ?? {},
+      };
+    }
+    // Anthropic tool_result → AI SDK tool-result (role must also change to "tool")
+    if (block.type === "tool_result") {
+      needsRoleFlip = true;
+      return {
+        type: "tool-result",
+        toolCallId: block.tool_use_id as string,
+        toolName: "unknown",
+        result: typeof block.content === "string" ? block.content : JSON.stringify(block.content ?? ""),
+      };
+    }
+    return block;
+  });
+
+  // Safety net: drop messages with any unrecognized block types
+  for (const block of migrated) {
+    const b = block as Record<string, unknown>;
+    if (b.type && !VALID_BLOCK_TYPES.has(b.type as string)) return null;
+  }
+
+  return {
+    role: needsRoleFlip ? "tool" : msg.role,
+    content: migrated as unknown[],
+  };
+}
+
 /**
  * Truncate tool result output values that exceed MAX_TOOL_RESULT_LENGTH.
  * Only affects the copy written to DB — the current turn keeps full results.
@@ -197,10 +249,19 @@ function loadFromDb(chatId: number): ModelMessage[][] {
       .all()
       .reverse();
 
-    const messages: ModelMessage[] = rows.map((row) => ({
-      role: row.role as ModelMessage["role"],
-      content: deserializeContent(row.content),
-    })) as ModelMessage[];
+    // Deserialize and migrate legacy Anthropic-format tool blocks to AI SDK format.
+    // Messages that can't be migrated are dropped to prevent schema validation errors.
+    const messages: ModelMessage[] = [];
+    for (const row of rows) {
+      const raw = {
+        role: row.role as string,
+        content: deserializeContent(row.content),
+      };
+      const migrated = migrateMessage(raw);
+      if (migrated) {
+        messages.push(migrated as ModelMessage);
+      }
+    }
 
     // Trim orphaned fragments at window boundaries, then group into turns
     const trimmed = trimToValidBoundaries(messages);
