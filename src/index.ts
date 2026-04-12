@@ -617,7 +617,10 @@ async function main() {
     // Register grammY's webhook handler AFTER setWebhook succeeds.
     // webhookCallback() must be called after setWebhook, not before,
     // because it permanently marks the bot as webhook-mode (blocking bot.start()).
-    const handler = webhookCallback(bot, "http", { secretToken: webhookSecret });
+    const handler = webhookCallback(bot, "http", {
+      secretToken: webhookSecret,
+      timeoutMilliseconds: 120_000, // 2 min — agent loop w/ Playwright needs headroom
+    });
     setWebhookHandler(handler);
 
     markBotReady();
