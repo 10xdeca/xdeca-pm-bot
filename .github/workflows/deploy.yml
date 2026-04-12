@@ -51,6 +51,7 @@ jobs:
           GREMLIN_EMAIL=${{ secrets.GREMLIN_EMAIL }}
           GREMLIN_EMAIL_PASSWORD=${{ secrets.GREMLIN_EMAIL_PASSWORD }}
           GREMLIN_GITHUB_TOKEN=${{ secrets.GREMLIN_GITHUB_TOKEN }}
+          BRAVE_SEARCH_API_KEY=${{ secrets.BRAVE_SEARCH_API_KEY }}
           WEBHOOK_URL=${{ secrets.WEBHOOK_URL }}
           WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
           DEPLOY_SHA=${{ github.sha }}

@@ -31,6 +31,7 @@ import { registerDirectMessageTools } from "./tools/direct-message.js";
 import { registerGitHubRepoTools } from "./tools/github-repo.js";
 import { registerResearchTool } from "./tools/research.js";
 import { registerKickstartTools } from "./tools/kickstart.js";
+import { registerWebSearchTool } from "./tools/web-search.js";
 
 // Scheduler
 import { startTaskChecker } from "./scheduler/task-checker.js";
@@ -573,6 +574,7 @@ async function main() {
   registerGitHubRepoTools();
   registerResearchTool(bot.api);
   registerKickstartTools();
+  registerWebSearchTool();
 
   // Initialize MCP servers
   await mcpManager.init();
