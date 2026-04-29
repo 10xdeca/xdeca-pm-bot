@@ -10,6 +10,8 @@ Gremlin is sleeping. Hibernation is concentrated on purpose — the only state t
 
 **Why teardown instead of stop-in-place:** the OCI server runs `/etc/cron.d/docker-watchdog` (`*/15 *`, root, restarts any exited compose container) and `/etc/cron.d/xdeca-health-check` (hourly, alerts on exited containers). A stopped-but-existing gremlin would have been resurrected within 15 minutes and triggered hourly Telegram alerts. Tearing down side-steps both — `docker ps -a` no longer sees gremlin, so the watchdog and health-check have nothing to act on.
 
+**Backup cron also had to be tamed** (added 2026-04-29): `/etc/cron.d/xdeca-backup` (daily 4 AM) iterates a hardcoded service list including `gremlin` and runs `docker cp gremlin:/app/data/gremlin.db`. With no container, that fails and posts a "Backup Failure" Telegram alert every morning. Fix was to drop `gremlin` from the `all` loop in `xdeca-infra/scripts/backup.sh` (the `gremlin)` case is kept so manual backups still work post-wake). This is the third OCI cron job that has opinions about gremlin's existence — the pattern is: any infra layer that *consumes* the container needs its own hibernation step.
+
 **What shipped and worked well**
 - Full Claude-Sonnet agent loop over ~88 MCP tools (Kan + Outline + Radicale + Playwright)
 - Sprint reminders, kickstart wizard, standup config, contact scanner, new-member onboarding
@@ -32,6 +34,7 @@ Gremlin is sleeping. Hibernation is concentrated on purpose — the only state t
    ssh 149.118.69.221 'docker cp /tmp/gremlin-2026-04-27.db gremlin:/app/data/gremlin.db && docker restart gremlin && rm /tmp/gremlin-2026-04-27.db'
    ```
 4. **Verify:** `curl http://149.118.69.221:8080/health` returns 200, and a test message in the "Sprints of Electron Workshop" group gets a response.
+5. **Re-add gremlin to the daily backup loop:** in `xdeca-infra/scripts/backup.sh`, restore `gremlin` to the `for svc in kanbn outline radicale; do` loop (and remove the hibernation comment above it). Then redeploy: `./scripts/deploy-to.sh 149.118.69.221 backups`. Without this, the DB will not be backed up to `10xdeca/xdeca-backups` even though gremlin is running.
 
 There's an orphaned named volume `gremlin_gremlin_data` on the OCI box left over from a pre-rename deploy — it's not connected to anything and the current compose file uses a different name. Leave it alone unless you're cleaning house.
 
