@@ -88,6 +88,14 @@ export function registerServerOpsTools(): void {
   });
 
   // --- restart_mcp_server ---
+  // verify wrapper observes mcpManager.healthCheck for the targeted server
+  // both before and after restart. If pre was healthy and post is unhealthy,
+  // the registry logs a regression and annotates the tool result. Rollback
+  // is not attempted — for now, surfacing the regression is enough.
+  // TODO: capture the args at verify-construction time so verify can target
+  // the same server the handler acted on. Current `lastTargetServer` closure
+  // works because tool calls are serialised, but is fragile if that changes.
+  let lastTargetServer: string | undefined;
   registerCustomTool({
     name: "restart_mcp_server",
     description:
@@ -106,6 +114,7 @@ export function registerServerOpsTools(): void {
     },
     handler: async (args) => {
       const serverName = typeof args.server === "string" ? args.server : "";
+      lastTargetServer = serverName;
       const validServers = mcpManager.getServerNames();
 
       if (!validServers.includes(serverName)) {
@@ -115,9 +124,25 @@ export function registerServerOpsTools(): void {
       const result = await mcpManager.restartServer(serverName);
       return JSON.stringify(result);
     },
+    verify: async () => {
+      if (!lastTargetServer) {
+        // No target captured yet (pre-call). Treat as healthy so a missing
+        // pre-snapshot doesn't masquerade as a regression.
+        return { healthy: true, details: "no target captured" };
+      }
+      const results = await mcpManager.healthCheck(lastTargetServer);
+      const status = results[0];
+      return {
+        healthy: status?.status === "healthy",
+        details: status,
+      };
+    },
   });
 
   // --- restart_bot ---
+  // No verify: the bot is restarting itself, so it cannot observe its own
+  // post-state. Health regressions are caught externally by the OCI watchdog
+  // and hourly health-check crons (see CLAUDE.md hibernation notes).
   registerCustomTool({
     name: "restart_bot",
     description:
