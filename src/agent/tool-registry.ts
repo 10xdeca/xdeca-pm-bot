@@ -30,15 +30,16 @@ export interface CustomToolDef {
   inputSchema: Record<string, unknown>;
   handler: (args: Record<string, unknown>) => Promise<string>;
   /**
-   * Optional safety wrapper. When present, the registry runs `verify()` immediately
-   * before and after `handler()`. If pre was healthy and post is not, the regression
-   * is logged and surfaced in the tool's returned string. Rollback is not attempted
-   * here — that's a per-tool concern.
+   * Optional safety wrapper. When present, the registry runs `verify(args)` immediately
+   * before and after `handler(args)`, passing the same args the handler received so
+   * verify can target the specific subject of the call (e.g. which MCP server). If
+   * pre was healthy and post is not, the regression is logged and surfaced in the
+   * tool's returned string. Rollback is not attempted here — that's a per-tool concern.
    *
    * Read-only tools should leave this undefined. Tools that intentionally tear down
    * the observer (e.g. self-restart) should also leave it undefined and document why.
    */
-  verify?: () => Promise<HealthSnapshot>;
+  verify?: (args: Record<string, unknown>) => Promise<HealthSnapshot>;
 }
 
 const customTools = new Map<string, CustomToolDef>();
@@ -71,16 +72,17 @@ export function _getCustomTool(name: string): CustomToolDef | undefined {
  */
 export async function runWithVerify(
   toolName: string,
-  handler: () => Promise<string>,
-  verify?: () => Promise<HealthSnapshot>,
+  args: Record<string, unknown>,
+  handler: (args: Record<string, unknown>) => Promise<string>,
+  verify?: (args: Record<string, unknown>) => Promise<HealthSnapshot>,
 ): Promise<{ result: string; verify?: VerifyOutcome }> {
   if (!verify) {
-    return { result: await handler() };
+    return { result: await handler(args) };
   }
 
-  const pre = await safeVerify(verify);
-  const result = await handler();
-  const post = await safeVerify(verify);
+  const pre = await safeVerify(verify, args);
+  const result = await handler(args);
+  const post = await safeVerify(verify, args);
 
   const regressed = pre.healthy && !post.healthy;
   const outcome: VerifyOutcome = { pre, post, regressed };
@@ -100,9 +102,12 @@ export async function runWithVerify(
   return { result, verify: outcome };
 }
 
-async function safeVerify(verify: () => Promise<HealthSnapshot>): Promise<HealthSnapshot> {
+async function safeVerify(
+  verify: (args: Record<string, unknown>) => Promise<HealthSnapshot>,
+  args: Record<string, unknown>,
+): Promise<HealthSnapshot> {
   try {
-    return await verify();
+    return await verify(args);
   } catch (err) {
     return {
       healthy: false,
@@ -161,7 +166,7 @@ export function getTools(chatId: number, api: Api): ToolSet {
       execute: async (args: Record<string, unknown>) => {
         sendTyping(api, chatId);
         console.log(`Tool call: ${name}(${JSON.stringify(args)})`);
-        const { result } = await runWithVerify(name, () => handler(args), verify);
+        const { result } = await runWithVerify(name, args, handler, verify);
         return result;
       },
     });

@@ -92,10 +92,6 @@ export function registerServerOpsTools(): void {
   // both before and after restart. If pre was healthy and post is unhealthy,
   // the registry logs a regression and annotates the tool result. Rollback
   // is not attempted — for now, surfacing the regression is enough.
-  // TODO: capture the args at verify-construction time so verify can target
-  // the same server the handler acted on. Current `lastTargetServer` closure
-  // works because tool calls are serialised, but is fragile if that changes.
-  let lastTargetServer: string | undefined;
   registerCustomTool({
     name: "restart_mcp_server",
     description:
@@ -114,7 +110,6 @@ export function registerServerOpsTools(): void {
     },
     handler: async (args) => {
       const serverName = typeof args.server === "string" ? args.server : "";
-      lastTargetServer = serverName;
       const validServers = mcpManager.getServerNames();
 
       if (!validServers.includes(serverName)) {
@@ -124,13 +119,14 @@ export function registerServerOpsTools(): void {
       const result = await mcpManager.restartServer(serverName);
       return JSON.stringify(result);
     },
-    verify: async () => {
-      if (!lastTargetServer) {
-        // No target captured yet (pre-call). Treat as healthy so a missing
-        // pre-snapshot doesn't masquerade as a regression.
-        return { healthy: true, details: "no target captured" };
+    verify: async (args) => {
+      const serverName = typeof args.server === "string" ? args.server : "";
+      if (!serverName) {
+        // No target in args. Treat as healthy so a missing target doesn't
+        // masquerade as a regression.
+        return { healthy: true, details: "no target specified" };
       }
-      const results = await mcpManager.healthCheck(lastTargetServer);
+      const results = await mcpManager.healthCheck(serverName);
       const status = results[0];
       return {
         healthy: status?.status === "healthy",
