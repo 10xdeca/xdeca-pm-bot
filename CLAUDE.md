@@ -12,6 +12,8 @@ Gremlin is sleeping. Hibernation is concentrated on purpose — the only state t
 
 **Backup cron also had to be tamed** (added 2026-04-29): `/etc/cron.d/xdeca-backup` (daily 4 AM) iterates a hardcoded service list including `gremlin` and runs `docker cp gremlin:/app/data/gremlin.db`. With no container, that fails and posts a "Backup Failure" Telegram alert every morning. Fix was to drop `gremlin` from the `all` loop in `xdeca-infra/scripts/backup.sh` (the `gremlin)` case is kept so manual backups still work post-wake). This is the third OCI cron job that has opinions about gremlin's existence — the pattern is: any infra layer that *consumes* the container needs its own hibernation step.
 
+**Pattern generalised** (2026-05-01): three xdeca-infra crons exhibit the same root confusion about container state. `xdeca-backup` *consumes* by alerting when the container is missing. `docker-watchdog` *fights* by restarting any Exited container, which loops legitimate one-shot init containers (kanbn-migrate, outline_minio_setup) that exit cleanly by design — restarted, re-run, exit again, endlessly. `xdeca-health-check` *consumes* by alerting on those same clean exits as if they were failures. The generalised lesson: if a cron filters by container state, it needs to model "this container's job is to exit cleanly when done" as a third category, distinct from both "should be running" and "should not exist".
+
 **What shipped and worked well**
 - Full Claude-Sonnet agent loop over ~88 MCP tools (Kan + Outline + Radicale + Playwright)
 - Sprint reminders, kickstart wizard, standup config, contact scanner, new-member onboarding
